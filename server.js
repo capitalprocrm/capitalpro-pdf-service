@@ -4,29 +4,37 @@ import { chromium } from "playwright";
 
 const app = express();
 
-// Allow requests from your app (Base44 / Capital Pro CRM)
+// --- Middleware ---
 app.use(cors());
-
-// Increase limit because estimate HTML can be large
 app.use(express.json({ limit: "25mb" }));
 
-/**
- * Health check
- * Visit: https://YOUR-RAILWAY-URL/health
- */
-app.get("/health", (req, res) => {
-  res.status(200).json({ ok: true });
-});
+// --- Routes Railway can ping ---
 app.get("/", (req, res) => {
   res.status(200).send("OK");
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+// Optional API key protection (recommended)
+// Set PDF_API_KEY in Railway Variables to enable it.
+function requireApiKey(req, res, next) {
+  const required = process.env.PDF_API_KEY;
+  if (!required) return next(); // not enabled
+  const provided = req.header("x-api-key");
+  if (provided !== required) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
 /**
- * Generate PDF
- * POST https://YOUR-RAILWAY-URL/generate-pdf
+ * POST /generate-pdf
  * Body: { html: "<full html>", filename?: "Estimate.pdf" }
+ * Headers (optional): x-api-key: <PDF_API_KEY>
  */
-app.post("/generate-pdf", async (req, res) => {
+app.post("/generate-pdf", requireApiKey, async (req, res) => {
   const { html, filename } = req.body || {};
 
   if (!html || typeof html !== "string") {
@@ -41,24 +49,24 @@ app.post("/generate-pdf", async (req, res) => {
 
     const page = await browser.newPage();
 
-    // Use screen styles (Tailwind / your normal layout)
+    // Use your normal screen CSS (usually matches Base44 preview best)
     await page.emulateMedia({ media: "screen" });
 
-    // Load HTML
+    // Load the HTML
     await page.setContent(html, { waitUntil: "networkidle" });
 
-    // Generate print-quality PDF
+    // Generate PDF
     const pdfBuffer = await page.pdf({
-      format: "Letter",              // US Letter
-      printBackground: true,         // keep colors/backgrounds
-      preferCSSPageSize: true,       // respects @page size if you use it
+      format: "Letter",
+      printBackground: true,
+      preferCSSPageSize: true,
       margin: {
         top: "0.5in",
         right: "0.5in",
         bottom: "0.5in",
         left: "0.5in"
       }
-      // NOTE: No scale here. Leaving scale unset prevents shrink-to-fit issues.
+      // Intentionally no "scale" here to avoid shrink-to-fit problems
     });
 
     const safeName = (filename || "Estimate.pdf").replaceAll('"', "");
