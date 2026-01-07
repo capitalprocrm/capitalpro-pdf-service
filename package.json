@@ -2,12 +2,17 @@
   "name": "capitalpro-pdf-service",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
-    "postinstall": "npx playwright install --with-deps chromium"
+    "postinstall": "npx playwright install chromium"
   },
   "dependencies": {
     "express": "^4.19.2",
+    "cors": "^2.8.5",
     "playwright": "^1.48.0"
   }
 }
+
