@@ -57,14 +57,30 @@ app.post("/generate-pdf", requireApiKey, async (req, res) => {
 
     // Generate PDF
     const pdfBuffer = await page.pdf({
-      format: "Letter",
-      printBackground: true,
-      preferCSSPageSize: true,
-      margin: {
-        top: "0.5in",
-        right: "0.5in",
-        bottom: "0.5in",
-        left: "0.5in"
+  format: "Letter",
+  printBackground: true,
+  preferCSSPageSize: true,
+
+  margin: {
+    top: "0.5in",
+    right: "0.5in",
+    bottom: "0.85in",
+    left: "0.5in"
+  },
+
+  displayHeaderFooter: true,
+
+  headerTemplate: `<div></div>`,
+
+  footerTemplate: `
+    <div style="width: 100%; font-size: 10px; padding: 0 0.5in; color: #666;">
+      <div style="text-align: center;">
+        Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+      </div>
+    </div>
+  `
+});
+
       }
       // Intentionally no "scale" here to avoid shrink-to-fit problems
     });
