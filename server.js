@@ -4,21 +4,15 @@ import { chromium } from "playwright";
 
 const app = express();
 
-// --- Middleware ---
+// Middleware
 app.use(cors());
 app.use(express.json({ limit: "25mb" }));
 
-// --- Routes Railway can ping ---
-app.get("/", (req, res) => {
-  res.status(200).send("OK");
-});
+// Basic routes for Railway + quick testing
+app.get("/", (req, res) => res.status(200).send("OK"));
+app.get("/health", (req, res) => res.status(200).json({ ok: true }));
 
-app.get("/health", (req, res) => {
-  res.status(200).json({ ok: true });
-});
-
-// Optional API key protection (recommended)
-// Set PDF_API_KEY in Railway Variables to enable it.
+// Optional API key protection (enabled only if PDF_API_KEY exists in Railway Variables)
 function requireApiKey(req, res, next) {
   const required = process.env.PDF_API_KEY;
   if (!required) return next(); // not enabled
@@ -32,7 +26,7 @@ function requireApiKey(req, res, next) {
 /**
  * POST /generate-pdf
  * Body: { html: "<full html>", filename?: "Estimate.pdf" }
- * Headers (optional): x-api-key: <PDF_API_KEY>
+ * Headers (optional if enabled): x-api-key: <PDF_API_KEY>
  */
 app.post("/generate-pdf", requireApiKey, async (req, res) => {
   const { html, filename } = req.body || {};
@@ -49,40 +43,36 @@ app.post("/generate-pdf", requireApiKey, async (req, res) => {
 
     const page = await browser.newPage();
 
-    // Use your normal screen CSS (usually matches Base44 preview best)
+    // Use screen CSS by default (usually matches your Base44 preview best)
     await page.emulateMedia({ media: "screen" });
 
-    // Load the HTML
+    // Load HTML and wait for network idle (images/fonts/etc.)
     await page.setContent(html, { waitUntil: "networkidle" });
 
-    // Generate PDF
+    // Footer with page numbers (safe string concatenation)
+    const headerTemplate = "<div></div>";
+    const footerTemplate =
+      '<div style="width:100%; font-size:10px; padding:0 0.5in; color:#666;">' +
+      '<div style="text-align:center;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>' +
+      "</div>";
+
     const pdfBuffer = await page.pdf({
-  format: "Letter",
-  printBackground: true,
-  preferCSSPageSize: true,
+      format: "Letter",
+      printBackground: true,
+      preferCSSPageSize: true,
 
-  margin: {
-    top: "0.5in",
-    right: "0.5in",
-    bottom: "0.85in",
-    left: "0.5in"
-  },
+      // Give extra space for footer so it doesn't overlap content
+      margin: {
+        top: "0.5in",
+        right: "0.5in",
+        bottom: "0.85in",
+        left: "0.5in"
+      },
 
-  displayHeaderFooter: true,
-
-  headerTemplate: `<div></div>`,
-
-  footerTemplate: `
-    <div style="width: 100%; font-size: 10px; padding: 0 0.5in; color: #666;">
-      <div style="text-align: center;">
-        Page <span class="pageNumber"></span> of <span class="totalPages"></span>
-      </div>
-    </div>
-  `
-});
-
-      }
-      // Intentionally no "scale" here to avoid shrink-to-fit problems
+      // Turn on header/footer rendering for page numbers
+      displayHeaderFooter: true,
+      headerTemplate,
+      footerTemplate
     });
 
     const safeName = (filename || "Estimate.pdf").replaceAll('"', "");
@@ -101,7 +91,9 @@ app.post("/generate-pdf", requireApiKey, async (req, res) => {
   }
 });
 
+// IMPORTANT: Railway provides PORT; fallback to 8080 for safety
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`PDF service listening on :${PORT}`);
 });
+
